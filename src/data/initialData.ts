@@ -3,7 +3,7 @@ import { Patient, SonyFTPConfig, IngestedQueueItem } from '../types';
 export const INITIAL_PATIENTS: Patient[] = [];
 
 export const INITIAL_FTP_CONFIG: SonyFTPConfig = {
-  localIp: '192.168.1.150',
+  localIp: '192.168.100.11',
   publicIp: '93.118.146.249',
   ftpPort: 2121,
   pasvPortRange: '50000 - 50100',

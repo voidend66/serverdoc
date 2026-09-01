@@ -22,7 +22,8 @@ import {
   Database,
   Layers,
   Save,
-  Activity
+  Activity,
+  AlertTriangle
 } from 'lucide-react';
 import { SonyFTPConfig } from '../types';
 import { ServerConfigBanner } from './ServerConfigBanner';
@@ -812,8 +813,48 @@ echo "[✓] Sony Camera FTP Server successfully configured with storage in ${upl
             </p>
           </div>
 
+          {/* Screenshot Analysis Box */}
+          <div className="bg-rose-50 border border-rose-200 p-4.5 rounded-2xl space-y-3 text-rose-950 font-sans">
+            <div className="flex items-center gap-2 font-bold text-rose-800 text-sm">
+              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+              <span>نتایج بررسی اختصاصی تصاویر مودم ارسال شده توسط شما (تصحیح فوری ۲ خطا):</span>
+            </div>
+
+            <div className="space-y-2.5 text-xs">
+              <div className="bg-white p-3 rounded-xl border border-rose-200 space-y-1">
+                <div className="font-bold text-rose-900 flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px]">۱</span>
+                  <span>علت اصلی عدم باز شدن وب با گوشی: اشتباه در پورت داخلی (Internal Port 8000)</span>
+                </div>
+                <p className="text-slate-600 leading-relaxed mr-6">
+                  در تصویر دوم (رول <code className="font-mono text-purple-700 bg-purple-50 px-1 rounded">webpage-cam</code>)، شما پورت خارجی را <code className="font-mono font-bold">8045</code> گذاشته‌اید اما پورت داخلی را به اشتباه روی <code className="font-mono font-bold text-rose-600">8000</code> تنظیم کرده‌اید! چون سرور اصلی روی پورت <code className="font-mono font-bold text-emerald-600">8045</code> گوش می‌دهد، باید پورت داخلی هم روی <code className="font-mono font-bold text-emerald-600">8045</code> تنظیم شود.
+                </p>
+              </div>
+
+              <div className="bg-white p-3 rounded-xl border border-rose-200 space-y-1">
+                <div className="font-bold text-rose-900 flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px]">۲</span>
+                  <span>علت اصلی قطع شدن اتصال FTP دوربین و گوشی با نت همراه: غیرفعال بودن رول پورت‌های دیتای پسیو (ftp-data)</span>
+                </div>
+                <p className="text-slate-600 leading-relaxed mr-6">
+                  در تصاویر جدول مودم، تیک چک‌باکس مربوط به رول <code className="font-mono text-yellow-700 bg-yellow-50 px-1 rounded">ftp-data</code> (پورت‌های 50000 تا 50100) <strong className="text-rose-700">خاموش (Unchecked / Disabled)</strong> است! موقع ارتباط از طریق ۴G یا اینترنت همراه، لایسنس لاگین روی ۲۱۲۱ صورت می‌گیرد اما انتقال عکس از پورت‌های دیتای پسیو انجام می‌شود. تیک رول <code className="font-mono">ftp-data</code> را در جدول مودم حتماً فعال کنید.
+                </p>
+              </div>
+
+              <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200 space-y-1">
+                <div className="font-bold text-emerald-900 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>آی‌پی محلی رزبری‌پای شما: <code className="font-mono text-emerald-800">192.168.100.11</code></span>
+                </div>
+                <p className="text-slate-600 leading-relaxed mr-6">
+                  آی‌پی محلی دستگاه رزبری‌پای در مودم شما <code className="font-mono font-bold">192.168.100.11</code> ثبت شده است و تمام اسکریپت‌ها و کانفیگ‌های سامانه روی این آی‌پی تنظیم گردیدند.
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-            <h4 className="font-bold text-slate-800 text-sm">جدول قوانین فوروارد پورت در مودم (Virtual Server / Port Forwarding):</h4>
+            <h4 className="font-bold text-slate-800 text-sm">جدول صحیح و اصلاح‌شده قوانین فوروارد پورت در مودم:</h4>
             <div className="overflow-x-auto">
               <table className="w-full text-right border-collapse bg-white rounded-lg overflow-hidden border border-slate-200 font-mono">
                 <thead className="bg-slate-100 text-slate-700 text-[11px]">

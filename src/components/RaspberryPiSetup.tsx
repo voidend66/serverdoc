@@ -21,10 +21,12 @@ import {
   CheckCircle2,
   Database,
   Layers,
-  Save
+  Save,
+  Activity
 } from 'lucide-react';
 import { SonyFTPConfig } from '../types';
 import { ServerConfigBanner } from './ServerConfigBanner';
+import { StorageDiagnostic } from './StorageDiagnostic';
 
 interface RaspberryPiSetupProps {
   ftpConfig: SonyFTPConfig;
@@ -36,7 +38,7 @@ export const RaspberryPiSetup: React.FC<RaspberryPiSetupProps> = ({
   onUpdateConfig
 }) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'sony_menu' | 'storage_config' | 'port_forward' | 'script' | 'test'>('storage_config');
+  const [activeTab, setActiveTab] = useState<'storage_diagnostic' | 'storage_config' | 'sony_menu' | 'port_forward' | 'script' | 'test'>('storage_diagnostic');
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
 
   const [localIp, setLocalIp] = useState(ftpConfig.localIp || '192.168.1.150');
@@ -46,7 +48,7 @@ export const RaspberryPiSetup: React.FC<RaspberryPiSetupProps> = ({
   const [authType, setAuthType] = useState<'anonymous' | 'authenticated'>(ftpConfig.authType || 'anonymous');
   
   // Storage settings state
-  const [uploadFolder, setUploadFolder] = useState(ftpConfig.uploadFolder || '/media/pi/RHINO_HDD/photos');
+  const [uploadFolder, setUploadFolder] = useState(ftpConfig.uploadFolder || '/media/mahdi/mm/doctor');
   const [storageDriveType, setStorageDriveType] = useState<'external_hdd' | 'internal_sd' | 'nas_share' | 'custom'>(
     ftpConfig.storageDriveType || 'external_hdd'
   );
@@ -344,13 +346,23 @@ echo "[✓] Sony Camera FTP Server successfully configured with storage in ${upl
       {/* Tabs Navigation */}
       <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto">
         <button
+          onClick={() => setActiveTab('storage_diagnostic')}
+          className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
+            activeTab === 'storage_diagnostic' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Activity className="w-4 h-4" />
+          <span>تست سلامت هارد دیسک و دیتابیس SQLite</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('storage_config')}
           className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
             activeTab === 'storage_config' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-100'
           }`}
         >
           <Folder className="w-4 h-4" />
-          <span>۱. تعیین محل ذخیره‌سازی و دیسک‌ها (Storage Path)</span>
+          <span>پیکربندی مسیر ذخیره‌سازی (Storage Path)</span>
         </button>
 
         <button
@@ -360,7 +372,7 @@ echo "[✓] Sony Camera FTP Server successfully configured with storage in ${upl
           }`}
         >
           <Camera className="w-4 h-4" />
-          <span>۲. تنظیمات منوی دوربین سونی (Sony Menu)</span>
+          <span>تنظیمات منوی دوربین سونی (Sony Menu)</span>
         </button>
 
         <button
@@ -370,7 +382,7 @@ echo "[✓] Sony Camera FTP Server successfully configured with storage in ${upl
           }`}
         >
           <Globe className="w-4 h-4" />
-          <span>۳. پورت فورواردینگ مودم و آی‌پی استاتیک</span>
+          <span>پورت فورواردینگ مودم و آی‌پی استاتیک</span>
         </button>
 
         <button
@@ -380,7 +392,7 @@ echo "[✓] Sony Camera FTP Server successfully configured with storage in ${upl
           }`}
         >
           <Terminal className="w-4 h-4" />
-          <span>۴. اسکریپت پایتون و سرویس رزبری‌پای</span>
+          <span>اسکریپت پایتون و سرویس رزبری‌پای</span>
         </button>
 
         <button
@@ -390,9 +402,20 @@ echo "[✓] Sony Camera FTP Server successfully configured with storage in ${upl
           }`}
         >
           <RefreshCw className="w-4 h-4" />
-          <span>۵. تست ارتباط زنده و پینگ سرور</span>
+          <span>تست ارتباط زنده و پینگ سرور</span>
         </button>
       </div>
+
+      {/* Tab: Storage Diagnostic (Health, SQLite, Read/Write Test) */}
+      {activeTab === 'storage_diagnostic' && (
+        <StorageDiagnostic
+          currentPath={uploadFolder}
+          onPathChange={(newPath) => {
+            setUploadFolder(newPath);
+            onUpdateConfig({ uploadFolder: newPath });
+          }}
+        />
+      )}
 
       {/* Tab: Storage & Drive Configuration (New Dedicated Section) */}
       {activeTab === 'storage_config' && (

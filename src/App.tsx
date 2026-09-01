@@ -66,7 +66,7 @@ export default function App() {
   const [cameraAngle, setCameraAngle] = useState<PhotoAngle>('frontal');
   const [cameraStage, setCameraStage] = useState<PhotoStage>('pre_op');
 
-  // Persistence
+  // Persistence & Server SQLite Sync
   useEffect(() => {
     localStorage.setItem('rhino_patients_v4', JSON.stringify(patients));
   }, [patients]);
@@ -74,6 +74,25 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('rhino_ftp_config_v4', JSON.stringify(ftpConfig));
   }, [ftpConfig]);
+
+  // Initial load from SQLite database on hard drive (if server is available)
+  useEffect(() => {
+    const fetchPatientsFromSQLite = async () => {
+      try {
+        const res = await fetch('/api/patients');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.patients) && data.patients.length > 0) {
+          setPatients(data.patients);
+          if (!selectedPatient) {
+            setSelectedPatient(data.patients[0]);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not sync with SQLite backend:', err);
+      }
+    };
+    fetchPatientsFromSQLite();
+  }, []);
 
   // Active patient for Sony shooting
   const activeShootingPatient = patients.find(p => p.id === activeShootingPatientId) || null;
@@ -97,10 +116,17 @@ export default function App() {
     }));
   };
 
-  const handleUpdatePatientPhotos = (patientId: string, updatedPhotos: ClinicalPhoto[]) => {
+  const handleUpdatePatientPhotos = async (patientId: string, updatedPhotos: ClinicalPhoto[]) => {
     setPatients(prev => prev.map(p => {
       if (p.id === patientId) {
-        return { ...p, photos: updatedPhotos, updatedAt: new Date().toLocaleDateString('fa-IR') };
+        const updated = { ...p, photos: updatedPhotos, updatedAt: new Date().toLocaleDateString('fa-IR') };
+        // Sync with SQLite backend
+        fetch('/api/patients', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated)
+        }).catch(e => console.warn('SQLite patient update failed:', e));
+        return updated;
       }
       return p;
     }));
@@ -109,17 +135,23 @@ export default function App() {
     }
   };
 
-  const handleSavePatient = (patientData: Partial<Patient>) => {
+  const handleSavePatient = async (patientData: Partial<Patient>) => {
     if (editingPatient) {
       // Edit existing
-      setPatients(prev => prev.map(p => {
-        if (p.id === editingPatient.id) {
-          const updated = { ...p, ...patientData, updatedAt: new Date().toLocaleDateString('fa-IR') };
-          if (selectedPatient?.id === p.id) setSelectedPatient(updated);
-          return updated;
-        }
-        return p;
-      }));
+      const updated = { ...editingPatient, ...patientData, updatedAt: new Date().toLocaleDateString('fa-IR') };
+      setPatients(prev => prev.map(p => p.id === editingPatient.id ? updated : p));
+      if (selectedPatient?.id === editingPatient.id) setSelectedPatient(updated);
+      
+      // Save to SQLite
+      try {
+        await fetch('/api/patients', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated)
+        });
+      } catch (err) {
+        console.warn('Could not save patient to SQLite:', err);
+      }
     } else {
       // Create new
       const newFileNo = `RH-1403-${Math.floor(100 + Math.random() * 900)}`;
@@ -148,6 +180,17 @@ export default function App() {
       setPatients(prev => [newPatient, ...prev]);
       setSelectedPatient(newPatient);
       setActiveShootingPatientId(newPatient.id);
+
+      // Save to SQLite
+      try {
+        await fetch('/api/patients', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newPatient)
+        });
+      } catch (err) {
+        console.warn('Could not create patient in SQLite:', err);
+      }
     }
     setEditingPatient(null);
   };

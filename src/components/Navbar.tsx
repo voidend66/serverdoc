@@ -9,13 +9,14 @@ import {
   Wifi, 
   HardDrive,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  FolderOpen
 } from 'lucide-react';
 import { Patient, SonyFTPConfig } from '../types';
 
 interface NavbarProps {
-  activeTab: 'patients' | 'patient_detail' | 'comparison' | 'ftp_inbox' | 'pi_setup';
-  setActiveTab: (tab: 'patients' | 'patient_detail' | 'comparison' | 'ftp_inbox' | 'pi_setup') => void;
+  activeTab: 'patients' | 'patient_detail' | 'comparison' | 'file_viewer' | 'pi_setup' | 'ftp_inbox';
+  setActiveTab: (tab: 'patients' | 'patient_detail' | 'comparison' | 'file_viewer' | 'pi_setup' | 'ftp_inbox') => void;
   activePatient: Patient | null;
   ftpConfig: SonyFTPConfig;
   inboxCount: number;
@@ -36,28 +37,26 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-2">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
               </span>
-              <span className="text-slate-300">سرور FTP و وب داشبورد:</span>
-              <span className="font-mono text-emerald-400 bg-slate-800/80 px-2 py-0.5 rounded text-[11px] border border-slate-700 font-bold">
-                {ftpConfig.publicIp}:(FTP){ftpConfig.ftpPort} | (Web):8045 | {ftpConfig.authType === 'anonymous' ? 'Anonymous' : ftpConfig.username}
+              <span className="text-slate-300">داشبورد و فایل ویور:</span>
+              <span className="font-mono text-cyan-400 bg-slate-800/80 px-2 py-0.5 rounded text-[11px] border border-slate-700 font-bold">
+                {ftpConfig.publicIp}:8045
               </span>
             </div>
 
             <div className="flex items-center gap-1.5 text-slate-300">
-              <Camera className="w-3.5 h-3.5 text-emerald-400" />
-              <span>دوربین سونی:</span>
-              {ftpConfig.cameraStatus.connected ? (
-                <>
-                  <span className="text-white font-medium">{ftpConfig.cameraStatus.model}</span>
-                  <span className="text-[10px] bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 px-1.5 py-0.2 rounded">
-                    باتری {ftpConfig.cameraStatus.batteryPercent}٪
-                  </span>
-                </>
-              ) : (
-                <span className="text-slate-400 font-medium">آماده دریافت اتصال (پورت {ftpConfig.ftpPort})</span>
-              )}
+              <HardDrive className="w-3.5 h-3.5 text-amber-400" />
+              <span>هارد اکسترنال:</span>
+              <span className="text-white font-mono text-[11px] bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                /media/mahdi/mm/doctor
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-slate-400 text-[11px]">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span>سرور FTP: مجزا در سیستم فعال است</span>
             </div>
           </div>
 
@@ -69,13 +68,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="font-mono text-[11px] text-emerald-300">({activePatient.fileNo})</span>
               </div>
             ) : (
-              <span className="text-slate-400 text-[11px]">هیچ بیماری برای عکاسی سریع انتخاب نشده</span>
+              <span className="text-slate-400 text-[11px]">بیماری انتخاب نشده</span>
             )}
-
-            <div className="flex items-center gap-1 text-slate-300 text-[11px] bg-slate-800/90 px-2 py-0.5 rounded border border-slate-700">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-              <span>پروتکل Standard FTP (بدون رمزنگاری / سازگار با سونی)</span>
-            </div>
           </div>
         </div>
       </div>
@@ -95,16 +89,29 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <h1 className="font-extrabold text-slate-900 text-base leading-tight tracking-tight">
                     سامانه رینوپلاستی
                   </h1>
-                  <span className="bg-emerald-100/90 text-emerald-800 border border-emerald-300/80 text-[10px] font-bold px-2 py-0.5 rounded-md leading-none">
-                    Sony Ingest
+                  <span className="bg-cyan-100/90 text-cyan-900 border border-cyan-300/80 text-[10px] font-bold px-2 py-0.5 rounded-md leading-none">
+                    File Viewer
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500 font-medium">سرور تخصصی عکاسی پزشکی (پورت 8045)</p>
+                <p className="text-[11px] text-slate-500 font-medium">فایل ویور و بازرس عکس‌های هارد دیسک (پورت 8045)</p>
               </div>
             </div>
 
-            {/* Navigation Tabs - Shifted to the right next to brand */}
+            {/* Navigation Tabs */}
             <nav className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+              <button
+                id="nav-file-viewer-btn"
+                onClick={() => setActiveTab('file_viewer')}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all duration-150 cursor-pointer ${
+                  activeTab === 'file_viewer'
+                    ? 'bg-cyan-700 text-white shadow-xs ring-1 ring-cyan-800'
+                    : 'bg-cyan-50/70 text-cyan-900 hover:bg-cyan-100 hover:text-cyan-950 border border-cyan-200'
+                }`}
+              >
+                <FolderOpen className="w-3.5 h-3.5 text-cyan-600" />
+                <span>فایل ویور و کاوشگر هارد</span>
+              </button>
+
               <button
                 id="nav-patients-btn"
                 onClick={() => setActiveTab('patients')}
@@ -132,24 +139,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
 
               <button
-                id="nav-inbox-btn"
-                onClick={() => setActiveTab('ftp_inbox')}
-                className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all duration-150 cursor-pointer ${
-                  activeTab === 'ftp_inbox'
-                    ? 'bg-emerald-700 text-white shadow-xs ring-1 ring-emerald-800'
-                    : 'bg-slate-50 text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 border border-slate-200/90'
-                }`}
-              >
-                <Camera className="w-3.5 h-3.5" />
-                <span>ورودی زنده دوربین سونی</span>
-                {inboxCount > 0 && (
-                  <span className="bg-amber-500 text-white text-[10px] font-mono font-black px-1.5 py-0.2 rounded-full shadow-xs">
-                    {inboxCount}
-                  </span>
-                )}
-              </button>
-
-              <button
                 id="nav-pi-setup-btn"
                 onClick={() => setActiveTab('pi_setup')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all duration-150 cursor-pointer ${
@@ -159,7 +148,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 <Server className="w-3.5 h-3.5" />
-                <span>تنظیمات سرور و هارد</span>
+                <span>تنظیمات هارد و شبکه</span>
               </button>
             </nav>
           </div>

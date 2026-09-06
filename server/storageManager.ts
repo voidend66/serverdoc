@@ -443,4 +443,336 @@ export class HardDriveStorageManager {
     stmt.free();
     return null;
   }
+
+  /**
+   * Browse a directory on the hard drive
+   */
+  public async browseDirectory(targetPath?: string, filter?: string) {
+    const currentDir = targetPath && targetPath.trim().length > 0 ? path.resolve(targetPath) : this.baseDir;
+
+    // If folder doesn't exist, try to ensure base folders
+    if (!fs.existsSync(currentDir)) {
+      if (currentDir === this.baseDir || currentDir === this.photosDir || currentDir === this.dbDir) {
+        try {
+          fs.mkdirSync(currentDir, { recursive: true });
+        } catch {}
+      }
+    }
+
+    if (!fs.existsSync(currentDir)) {
+      throw new Error(`مسیر '${currentDir}' روی هارد دیسک یافت نشد`);
+    }
+
+    const stat = fs.statSync(currentDir);
+    if (!stat.isDirectory()) {
+      throw new Error(`مسیر انتخابی یک پوشه نیست: ${currentDir}`);
+    }
+
+    const rawEntries = fs.readdirSync(currentDir, { withFileTypes: true });
+    const items: any[] = [];
+
+    const imageExts = new Set([".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".tif", ".arw", ".raw"]);
+    const dbExts = new Set([".sqlite", ".db", ".sqlite3", ".sql"]);
+    const textExts = new Set([".txt", ".log", ".json", ".md", ".csv", ".xml"]);
+
+    for (const entry of rawEntries) {
+      // Ignore hidden files starting with . except if explicitly needed
+      if (entry.name.startsWith(".") && entry.name !== ".test_write") {
+        continue;
+      }
+
+      const fullPath = path.join(currentDir, entry.name);
+      try {
+        const itemStat = fs.statSync(fullPath);
+        const isDir = entry.isDirectory();
+        const ext = isDir ? "" : path.extname(entry.name).toLowerCase();
+        const isImage = !isDir && imageExts.has(ext);
+        const isDatabase = !isDir && dbExts.has(ext);
+        const isText = !isDir && textExts.has(ext);
+
+        let itemCount = undefined;
+        if (isDir) {
+          try {
+            itemCount = fs.readdirSync(fullPath).length;
+          } catch {
+            itemCount = 0;
+          }
+        }
+
+        // Apply filter if specified
+        if (filter === "images" && !isImage && !isDir) continue;
+        if (filter === "folders" && !isDir) continue;
+        if (filter === "database" && !isDatabase && !isDir) continue;
+
+        items.push({
+          name: entry.name,
+          path: fullPath,
+          relativePath: path.relative(this.baseDir, fullPath) || entry.name,
+          isDirectory: isDir,
+          sizeBytes: isDir ? 0 : itemStat.size,
+          sizeFormatted: isDir ? `${itemCount ?? 0} آیتم` : formatFileSize(itemStat.size),
+          modifiedAt: itemStat.mtime.toISOString(),
+          createdAt: itemStat.birthtime.toISOString(),
+          extension: ext.replace(".", "").toUpperCase(),
+          isImage,
+          isDatabase,
+          isText,
+          itemCount,
+          viewUrl: isImage ? `/api/files/view?path=${encodeURIComponent(fullPath)}` : undefined
+        });
+      } catch (entryErr) {
+        console.warn(`Could not stat ${fullPath}:`, entryErr);
+      }
+    }
+
+    // Sort: Folders first, then by modifiedAt desc
+    items.sort((a, b) => {
+      if (a.isDirectory && !b.isDirectory) return -1;
+      if (!a.isDirectory && b.isDirectory) return 1;
+      return new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime();
+    });
+
+    // Generate breadcrumbs
+    const parts = currentDir.split(path.sep).filter(Boolean);
+    const breadcrumbs: { name: string; path: string }[] = [];
+    let accumulated = "";
+    for (let i = 0; i < parts.length; i++) {
+      accumulated += "/" + parts[i];
+      breadcrumbs.push({
+        name: parts[i],
+        path: accumulated
+      });
+    }
+
+    const parentPath = path.dirname(currentDir);
+
+    return {
+      currentPath: currentDir,
+      parentPath: parentPath !== currentDir ? parentPath : null,
+      storageRoot: this.baseDir,
+      items,
+      breadcrumbs,
+      stats: {
+        totalItems: items.length,
+        totalFolders: items.filter(i => i.isDirectory).length,
+        totalFiles: items.filter(i => !i.isDirectory).length,
+        totalImages: items.filter(i => i.isImage).length
+      }
+    };
+  }
+
+  /**
+   * Inspect a specific file on the hard drive
+   */
+  public async inspectFile(filePath: string) {
+    if (!fs.existsSync(filePath)) {
+      throw new Error("فایل در هارد دیسک یافت نشد");
+    }
+
+    const stat = fs.statSync(filePath);
+    const ext = path.extname(filePath).toLowerCase();
+    const isImage = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".arw"].includes(ext);
+    const isDatabase = [".sqlite", ".db", ".sqlite3"].includes(ext);
+    const isText = [".txt", ".log", ".json", ".md", ".csv"].includes(ext);
+
+    let imageDetails: any = undefined;
+    let textPreview: string | undefined = undefined;
+    let databaseDetails: any = undefined;
+
+    if (isImage) {
+      try {
+        // Read first 64KB to parse headers and EXIF without loading whole large RAW file
+        const fd = fs.openSync(filePath, "r");
+        const readLen = Math.min(stat.size, 65536);
+        const headerBuf = Buffer.alloc(readLen);
+        fs.readSync(fd, headerBuf, 0, readLen, 0);
+        fs.closeSync(fd);
+
+        imageDetails = parseImageHeader(headerBuf);
+      } catch (err) {
+        console.warn("Could not parse image header:", err);
+      }
+    } else if (isText && stat.size < 500000) {
+      try {
+        textPreview = fs.readFileSync(filePath, "utf-8").slice(0, 10000);
+      } catch {}
+    } else if (isDatabase && this.db && filePath === this.dbPath) {
+      try {
+        const tableStmt = this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
+        const tables: string[] = [];
+        while (tableStmt.step()) {
+          tables.push(tableStmt.getAsObject().name as string);
+        }
+        tableStmt.free();
+
+        let patientCount = 0;
+        let photoCount = 0;
+        try {
+          const pStmt = this.db.prepare("SELECT COUNT(*) as c FROM patients");
+          if (pStmt.step()) patientCount = pStmt.getAsObject().c as number;
+          pStmt.free();
+          const phStmt = this.db.prepare("SELECT COUNT(*) as c FROM photos");
+          if (phStmt.step()) photoCount = phStmt.getAsObject().c as number;
+          phStmt.free();
+        } catch {}
+
+        databaseDetails = {
+          tables,
+          patientCount,
+          photoCount
+        };
+      } catch {}
+    }
+
+    return {
+      filePath,
+      filename: path.basename(filePath),
+      sizeBytes: stat.size,
+      sizeFormatted: formatFileSize(stat.size),
+      createdAt: stat.birthtime.toISOString(),
+      modifiedAt: stat.mtime.toISOString(),
+      extension: ext.replace(".", "").toUpperCase(),
+      isImage,
+      isDatabase,
+      isText,
+      imageDetails,
+      textPreview,
+      databaseDetails,
+      url: isImage ? `/api/files/view?path=${encodeURIComponent(filePath)}` : undefined
+    };
+  }
+
+  /**
+   * Link an existing file from the HDD into a patient's clinical photos list
+   */
+  public async assignExistingFileToPatient(params: {
+    filePath: string;
+    patientId: string;
+    angle: string;
+    stage: string;
+    notes?: string;
+  }) {
+    if (!this.db) await this.initDatabase();
+    if (!this.db) throw new Error("دیتابیس در دسترس نیست");
+
+    if (!fs.existsSync(params.filePath)) {
+      throw new Error("فایل در هارد دیسک یافت نشد");
+    }
+
+    const filename = path.basename(params.filePath);
+    const photoId = `photo-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+
+    // Try reading EXIF
+    let exif: any = undefined;
+    try {
+      const inspect = await this.inspectFile(params.filePath);
+      if (inspect.imageDetails?.exif) {
+        exif = {
+          cameraModel: inspect.imageDetails.exif.cameraModel || "Sony Camera",
+          lensModel: inspect.imageDetails.exif.lensModel || "Macro Lens",
+          resolution: inspect.imageDetails.width ? `${inspect.imageDetails.width} × ${inspect.imageDetails.height}` : undefined,
+          shootingDate: inspect.modifiedAt
+        };
+      }
+    } catch {}
+
+    this.db.run(`
+      INSERT OR REPLACE INTO photos (
+        id, patientId, filename, filePath, angle, stage, timestamp, exifJson, notes, measurementsJson
+      ) VALUES (
+        :id, :patientId, :filename, :filePath, :angle, :stage, :timestamp, :exifJson, :notes, :measurementsJson
+      )
+    `, {
+      ":id": photoId,
+      ":patientId": params.patientId,
+      ":filename": filename,
+      ":filePath": params.filePath,
+      ":angle": params.angle || "frontal",
+      ":stage": params.stage || "pre_op",
+      ":timestamp": new Date().toISOString(),
+      ":exifJson": exif ? JSON.stringify(exif) : null,
+      ":notes": params.notes || "",
+      ":measurementsJson": null
+    });
+
+    this.saveDbToDisk();
+
+    return {
+      success: true,
+      photoId,
+      patientId: params.patientId,
+      filename,
+      filePath: params.filePath,
+      url: `/api/storage/photos/${photoId}`
+    };
+  }
+
+  /**
+   * Create a new folder on the hard drive
+   */
+  public async createDirectory(parentPath: string, folderName: string) {
+    const safeName = folderName.replace(/[^a-zA-Z0-9_\u0600-\u06FF-]/g, "_");
+    const target = path.join(parentPath, safeName);
+    if (!fs.existsSync(target)) {
+      fs.mkdirSync(target, { recursive: true });
+    }
+    return { success: true, path: target, name: safeName };
+  }
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function parseImageHeader(buffer: Buffer) {
+  if (buffer.length > 4 && buffer[0] === 0xff && buffer[1] === 0xd8) {
+    let offset = 2;
+    let width = 0;
+    let height = 0;
+    const exif: any = {};
+
+    while (offset < buffer.length - 8) {
+      if (buffer[offset] !== 0xff) {
+        offset++;
+        continue;
+      }
+      const marker = buffer[offset + 1];
+      if (marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7)) {
+        offset += 2;
+        continue;
+      }
+      if (offset + 4 > buffer.length) break;
+      const len = buffer.readUInt16BE(offset + 2);
+      if (marker === 0xc0 || marker === 0xc1 || marker === 0xc2) {
+        if (offset + 9 <= buffer.length) {
+          height = buffer.readUInt16BE(offset + 5);
+          width = buffer.readUInt16BE(offset + 7);
+        }
+      } else if (marker === 0xe1 && len > 14) {
+        const header = buffer.toString("utf8", offset + 4, offset + 8);
+        if (header === "Exif") {
+          exif.hasExif = true;
+          const exifStr = buffer.toString("latin1", offset + 4, Math.min(buffer.length, offset + 2 + len));
+          if (exifStr.includes("SONY") || exifStr.includes("Sony")) {
+            exif.cameraMake = "Sony";
+          }
+          const ilceMatch = exifStr.match(/(ILCE-[A-Za-z0-9]+|A7[A-Za-z0-9\-]+|ZV-[A-Za-z0-9]+)/i);
+          if (ilceMatch) exif.cameraModel = ilceMatch[0];
+          const lensMatch = exifStr.match(/(FE\s+[0-9]+.*?(OSS|GM|G|F[0-9.]+)|E\s+[0-9]+.*)/i);
+          if (lensMatch) exif.lensModel = lensMatch[0];
+        }
+      }
+      offset += 2 + len;
+      if (width > 0 && height > 0) break;
+    }
+    return { width, height, format: "JPEG", exif };
+  } else if (buffer.length >= 24 && buffer[0] === 0x89 && buffer.toString("ascii", 1, 4) === "PNG") {
+    const width = buffer.readUInt32BE(16);
+    const height = buffer.readUInt32BE(20);
+    return { width, height, format: "PNG" };
+  }
+  return null;
 }

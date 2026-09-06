@@ -35,27 +35,19 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
   }
 })();
 
-// In-memory or simulated Sony FTP status
+// FTP Status: Explicitly configured as EXTERNAL (internal daemon disabled per user request)
+// The web app runs as a dedicated File Viewer & Medical Inspector
 let ftpStatus = {
-  serverRunning: true,
-  ipAddress: "192.168.1.150",
+  serverRunning: false, // Turned off per user instruction
+  isExternalDaemon: true,
+  mode: "file_viewer_mode",
+  ipAddress: "192.168.100.11",
   publicIp: "93.118.146.249",
   port: 2121,
   pasvPorts: "50000-50100",
   storagePath: DEFAULT_STORAGE_PATH,
-  connectedCameras: [
-    {
-      id: "cam-1",
-      model: "Sony ILCE-7M4 (A7 IV)",
-      lens: "FE 90mm F2.8 Macro G OSS",
-      ip: "192.168.1.185",
-      battery: 100,
-      status: "online",
-      lastPhoto: "DSC04892.JPG",
-      transferMode: "Auto (Post-Shoot Transfer)",
-      totalTransferred: 0
-    }
-  ],
+  statusDescription: "سرور FTP توسط شما به صورت جداگانه ساخته شده و در سیستم اجرا می‌شود. سرور داخلی خاموش شده و سیستم در حالت فایل ویور (File Viewer) فعال است.",
+  connectedCameras: [],
   incomingQueue: [] as any[]
 };
 
@@ -202,7 +194,110 @@ app.get("/api/storage/photos/:id", async (req, res) => {
 });
 
 // ==========================================
-// 4. Sony FTP Daemon Status & Ingest APIs
+// 4. File Viewer & HDD Explorer APIs
+// ==========================================
+
+// Browse directory contents on the hard drive
+app.get("/api/files/browse", async (req, res) => {
+  try {
+    const targetPath = (req.query.path as string) || (req.query.dir as string) || DEFAULT_STORAGE_PATH;
+    const filter = req.query.filter as string;
+    const result = await storageManager.browseDirectory(targetPath, filter);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Serve physical file directly for File Viewer (image preview, etc.)
+app.get("/api/files/view", (req, res) => {
+  try {
+    const filePath = (req.query.path as string) || (req.query.filePath as string);
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).send("فایل یافت نشد");
+    }
+    const stat = fs.statSync(filePath);
+    if (stat.isDirectory()) {
+      return res.status(400).send("مسیر یک پوشه است، فایل نیست");
+    }
+
+    // Set cache control for images
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.sendFile(path.resolve(filePath));
+  } catch (err: any) {
+    res.status(500).send(err.message);
+  }
+});
+
+// Inspect file metadata, EXIF, dimensions, and file statistics
+app.get("/api/files/inspect", async (req, res) => {
+  try {
+    const filePath = (req.query.path as string) || (req.query.filePath as string);
+    if (!filePath) {
+      return res.status(400).json({ success: false, error: "مسیر فایل مشخص نشده است" });
+    }
+    const inspection = await storageManager.inspectFile(filePath);
+    res.json({ success: true, inspection });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Assign a viewed file from the hard drive directly to a patient's clinical album
+app.post("/api/files/assign-patient", async (req, res) => {
+  try {
+    const { filePath, patientId, angle, stage, notes } = req.body;
+    if (!filePath || !patientId) {
+      return res.status(400).json({ success: false, error: "مسیر فایل و شناسه بیمار الزامی است" });
+    }
+    const result = await storageManager.assignExistingFileToPatient({
+      filePath,
+      patientId,
+      angle,
+      stage,
+      notes
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Create a new folder on the hard drive
+app.post("/api/files/create-folder", async (req, res) => {
+  try {
+    const { parentPath, folderName } = req.body;
+    if (!folderName) {
+      return res.status(400).json({ success: false, error: "نام پوشه وارد نشده است" });
+    }
+    const base = parentPath || DEFAULT_STORAGE_PATH;
+    const result = await storageManager.createDirectory(base, folderName);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Delete a file with safety check
+app.post("/api/files/delete", (req, res) => {
+  try {
+    const { filePath } = req.body;
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, error: "فایل یافت نشد" });
+    }
+    const stat = fs.statSync(filePath);
+    if (stat.isDirectory()) {
+      return res.status(400).json({ success: false, error: "حذف پوشه از طریق این رابط مجاز نیست" });
+    }
+    fs.unlinkSync(filePath);
+    res.json({ success: true, message: "فایل با موفقیت حذف شد" });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// 5. External Sony FTP Status (Daemon Offloaded)
 // ==========================================
 
 app.get("/api/health", (req, res) => {

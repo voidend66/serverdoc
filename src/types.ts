@@ -145,3 +145,65 @@ export const STAGE_LABELS: Record<PhotoStage, { fa: string; en: string; color: s
   post_op_6m: { fa: '۶ ماه بعد از عمل', en: '6 Months Post-Op', color: 'bg-indigo-100 text-indigo-800 border-indigo-300' },
   post_op_1y: { fa: '۱ سال بعد از عمل (نهایی)', en: '1 Year Post-Op', color: 'bg-purple-100 text-purple-800 border-purple-300' },
 };
+
+export interface DiskItem {
+  name: string;
+  path: string;
+  relativePath: string;
+  isDirectory: boolean;
+  sizeBytes: number;
+  sizeFormatted: string;
+  modifiedAt: string;
+  createdAt: string;
+  extension: string;
+  isImage: boolean;
+  isDatabase: boolean;
+  isText: boolean;
+  itemCount?: number;
+  viewUrl?: string;
+}
+
+export interface DiskInspectionData {
+  filePath: string;
+  filename: string;
+  sizeBytes: number;
+  sizeFormatted: string;
+  createdAt: string;
+  modifiedAt: string;
+  extension: string;
+  isImage: boolean;
+  isDatabase: boolean;
+  isText: boolean;
+  imageDetails?: {
+    width?: number;
+    height?: number;
+    format?: string;
+    exif?: {
+      hasExif?: boolean;
+      cameraMake?: string;
+      cameraModel?: string;
+      lensModel?: string;
+    };
+  };
+  textPreview?: string;
+  databaseDetails?: {
+    tables: string[];
+    patientCount?: number;
+    photoCount?: number;
+  };
+  url?: string;
+}
+
+export interface BrowseDirectoryResult {
+  currentPath: string;
+  parentPath: string | null;
+  storageRoot: string;
+  items: DiskItem[];
+  breadcrumbs: { name: string; path: string }[];
+  stats: {
+    totalItems: number;
+    totalFolders: number;
+    totalFiles: number;
+    totalImages: number;
+  };
+}

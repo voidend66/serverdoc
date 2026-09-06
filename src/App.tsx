@@ -10,6 +10,7 @@ import { PatientDetail } from './components/PatientDetail';
 import { ComparisonSuite } from './components/ComparisonSuite';
 import { SonyFTPInbox } from './components/SonyFTPInbox';
 import { RaspberryPiSetup } from './components/RaspberryPiSetup';
+import { FileViewer } from './components/FileViewer';
 import { PatientModal } from './components/PatientModal';
 import { DirectCameraModal } from './components/DirectCameraModal';
 import { 
@@ -54,7 +55,7 @@ export default function App() {
 
   const [incomingQueue, setIncomingQueue] = useState<IngestedQueueItem[]>([]);
   
-  const [activeTab, setActiveTab] = useState<'patients' | 'patient_detail' | 'comparison' | 'ftp_inbox' | 'pi_setup'>('patients');
+  const [activeTab, setActiveTab] = useState<'patients' | 'patient_detail' | 'comparison' | 'file_viewer' | 'pi_setup' | 'ftp_inbox'>('file_viewer');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [activeShootingPatientId, setActiveShootingPatientId] = useState<string | null>(null);
 
@@ -324,6 +325,15 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {activeTab === 'file_viewer' && (
+          <FileViewer
+            patients={patients}
+            onUpdatePatientPhotos={handleUpdatePatientPhotos}
+            onSelectPatient={handleSelectPatient}
+            defaultPath={ftpConfig.uploadFolder || '/media/mahdi/mm/doctor'}
+          />
+        )}
+
         {activeTab === 'patients' && (
           <PatientList
             patients={patients}
@@ -390,33 +400,29 @@ export default function App() {
       <footer className="bg-slate-900 border-t border-slate-800 py-2.5 px-4 text-[11px] text-slate-400 shrink-0 font-mono">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-1.5 text-emerald-400 font-semibold">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>FTP DAEMON & WEB: RUNNING</span>
+            <div className="flex items-center gap-1.5 text-cyan-400 font-semibold">
+              <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+              <span>MODE: HDD FILE VIEWER & INSPECTOR</span>
             </div>
             <div className="h-3.5 w-px bg-slate-700 hidden sm:block"></div>
             <div className="flex items-center gap-1 text-slate-300">
               <span className="text-slate-500">WEB PORT:</span>
-              <span className="text-cyan-400 font-bold">8045 (داشبورد)</span>
+              <span className="text-cyan-400 font-bold">8045</span>
             </div>
             <div className="flex items-center gap-1 text-slate-300">
-              <span className="text-slate-500">FTP PORT:</span>
-              <span className="text-emerald-400 font-bold">{ftpConfig.ftpPort} / PASV {ftpConfig.pasvPortRange}</span>
+              <span className="text-slate-500">FTP SERVER:</span>
+              <span className="text-emerald-400 font-bold">External Daemon (Standalone)</span>
             </div>
             <div className="flex items-center gap-1 text-slate-300">
-              <span className="text-slate-500">STORAGE:</span>
-              <span className="text-amber-300 font-bold">{ftpConfig.uploadFolder} (هارد اکسترنال)</span>
-            </div>
-            <div className="flex items-center gap-1 text-slate-300">
-              <span className="text-slate-500">SECURITY:</span>
-              <span className="text-slate-300">Plain FTP (بدون رمزنگاری / سازگار با سونی)</span>
+              <span className="text-slate-500">STORAGE ROOT:</span>
+              <span className="text-amber-300 font-bold">/media/mahdi/mm/doctor</span>
             </div>
           </div>
 
           <div className="flex items-center gap-3 text-slate-400 text-[10px]">
             <span>داشبورد وب: <strong className="text-cyan-400">http://{ftpConfig.publicIp}:8045</strong></span>
             <span className="hidden md:inline">•</span>
-            <span className="text-slate-400 font-sans">سرور اختصاصی رزبری‌پای ۴ متصل به هارد اکسترنال</span>
+            <span className="text-slate-400 font-sans">هارد دیسک اکسترنال متصل به رزبری‌پای</span>
           </div>
         </div>
       </footer>
